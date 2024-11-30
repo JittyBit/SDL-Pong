@@ -11,18 +11,101 @@
 
 #define PADDLE_WIDTH 10
 #define PADDLE_HEIGHT 100
+#define PADDLE_SPEED 10
 
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#define max(a,b) (((a) > (b)) ? (a) : (b))
+
+#define BALL_RADIUS 5
+#define BALL_DIAMETER BALL_RADIUS*2
+
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
+
+inline int signum(const int x) {
+  return (!!x) * (1 - (((x >> 32) & 1) << 1));
+}
 
 typedef struct {
   int xpos;
   int ypos;
 } Paddle;
 
+// not sure how to draw circles yet
+// so will have square for now
+typedef struct {
+  int x;
+  int y;
+  int dx;
+  int dy;
+} Ball;
+
 // handles collision
-void move_paddle(Paddle* paddle, int dy) {
-  paddle->ypos = min(max(0, paddle->ypos+dy), SCREEN_HEIGHT-PADDLE_HEIGHT);
+void move_paddle(Paddle* paddle, const int dy) {
+  paddle->ypos = MIN(MAX(0, paddle->ypos+dy), SCREEN_HEIGHT-PADDLE_HEIGHT);
+}
+
+void ai_move(Paddle* paddle, Ball* ball) {
+  int dy = 0;
+  if (ball->y < paddle->ypos) {
+    dy = -PADDLE_SPEED;
+  } else if (ball->y > paddle->ypos + PADDLE_HEIGHT) {
+    dy = PADDLE_SPEED;
+  }
+  move_paddle(paddle, dy);
+}
+
+
+// returns true if ball hit left or right boundary
+bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
+  ball->y += ball->dy;
+  ball->x += ball->dx;
+
+  // collision with top wall
+  if (ball->y <= 0) {
+    ball->y = 0;
+    ball->dy = -ball->dy;
+  } else if (ball->y >= SCREEN_HEIGHT - (BALL_RADIUS)) {
+    ball->y = SCREEN_HEIGHT - (BALL_RADIUS);
+    ball->dy = -ball->dy;
+  }
+
+  // collision with either goal
+  if (ball->x <= 0 || ball->x >= SCREEN_WIDTH - (BALL_RADIUS)) return true;
+
+
+  // colliison with right (player) paddle
+  if (ball->x + BALL_RADIUS >= player_paddle->xpos &&
+        ball->y + BALL_RADIUS >= player_paddle->ypos &&
+        ball->y - BALL_RADIUS <= player_paddle->ypos + PADDLE_HEIGHT) {
+    ball->x = player_paddle->xpos - BALL_RADIUS;
+    ball->dx *= -1;
+    if (ball->y > player_paddle->ypos + (PADDLE_HEIGHT/2)) {
+      ball->dy = ball->dy;
+    } else {
+      ball->dy = -ball->dy;
+    }
+  }
+
+  // collision with left (ai) paddle
+  if (ball->x - BALL_RADIUS <= ai_paddle->xpos + PADDLE_WIDTH &&
+      ball->y + BALL_RADIUS >= ai_paddle->ypos &&
+      ball->y - BALL_RADIUS <= ai_paddle->ypos + PADDLE_HEIGHT) {
+    ball->x = ai_paddle->xpos + PADDLE_WIDTH + BALL_RADIUS;
+    ball->dx *= -1;
+    if (ball->y > ai_paddle->ypos + (PADDLE_HEIGHT/2)) {
+      ball->dy = ball->dy;
+    } else {
+      ball->dy = -ball->dy;
+    }
+  }
+
+  return false;
+}
+
+void render_ball(Ball* ball, SDL_Rect* draw_rect) {
+  draw_rect->w = BALL_DIAMETER;
+  draw_rect->h = BALL_DIAMETER;
+  draw_rect->x = ball->x - (BALL_RADIUS);
+  draw_rect->y = ball->y - (BALL_RADIUS);
 }
 
 void render_paddle(Paddle* paddle, SDL_Rect* draw_rect) {
@@ -66,9 +149,14 @@ int main(int argc, char** argv) {
   // 4. Score
   // 5. AI
 
-  Paddle player_paddle = { .xpos = SCREEN_WIDTH - PADDLE_WIDTH - 5, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
-  // Paddle ai_paddle = { 0 };
+  Paddle player_paddle = { .xpos = SCREEN_WIDTH - PADDLE_WIDTH - 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
+  Paddle ai_paddle = { .xpos = 0 + 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
+
+  Ball ball = { .x = SCREEN_WIDTH / 2, .y = SCREEN_HEIGHT / 2, .dx = 5, .dy = 5 };
+
   SDL_Rect paddle_rect = { 0 };
+  SDL_Rect ai_paddle_rect = { 0 };
+  SDL_Rect ball_rect = { 0 };
 
   while (running) {
     int dy = 0;
@@ -79,27 +167,33 @@ int main(int argc, char** argv) {
       } else if (event.type == SDL_KEYDOWN) {
         switch (event.key.keysym.sym) {
           case SDLK_k: {
-            dy = -10;
+            dy = -PADDLE_SPEED;
           } break;
           case SDLK_j: {
-            dy = 10;
+            dy = PADDLE_SPEED;
           } break;
           default: {};
         }
       }
     }
 
-    // update paddles
+    // update
     player_paddle.ypos += dy;
     move_paddle(&player_paddle, dy);
+    ai_move(&ai_paddle, &ball);
+    if (move_ball(&ball, &player_paddle, &ai_paddle)) break;
 
     // clear screen
     SDL_FillRect(screen_surface, NULL, SDL_MapRGB(screen_surface->format, 0, 0, 0));
 
-    // render paddles
+    // render
     render_paddle(&player_paddle, &paddle_rect);
+    render_paddle(&ai_paddle, &ai_paddle_rect);
+    render_ball(&ball, &ball_rect);
+
     SDL_FillRect(screen_surface, &paddle_rect, SDL_MapRGB(screen_surface->format, 0xFF, 0xFF, 0xFF));
-    // SDL_FillRect(screen_surface, &rect, SDL_MapRGB(screen_surface->format, 0xFF, 0xFF, 0xFF));
+    SDL_FillRect(screen_surface, &ball_rect, SDL_MapRGB(screen_surface->format, 0, 0xFF, 0));
+    SDL_FillRect(screen_surface, &ai_paddle_rect, SDL_MapRGB(screen_surface->format, 0xFF, 0xFF, 0xFF));
 
     SDL_UpdateWindowSurface(window);
     SDL_Delay(20);
