@@ -13,15 +13,20 @@
 #define PADDLE_HEIGHT 100
 #define PADDLE_SPEED 10
 
-
 #define BALL_RADIUS 5
 #define BALL_DIAMETER BALL_RADIUS*2
+
+#define REFLECTION_CONST 1.5
 
 #define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #define MAX(a,b) (((a) > (b)) ? (a) : (b))
 
-inline int signum(const int x) {
-  return (!!x) * (1 - (((x >> 32) & 1) << 1));
+int signum(const int x) {
+  return (!!x) * (1 - (((x >> 31) & 1) << 1));
+}
+
+int abs(const int _X) {
+  return (_X >> 31) ? (~_X)+1 : _X;
 }
 
 typedef struct {
@@ -72,17 +77,26 @@ bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
   if (ball->x <= 0 || ball->x >= SCREEN_WIDTH - (BALL_RADIUS)) return true;
 
 
-  // colliison with right (player) paddle
+  // collision with right (player) paddle
   if (ball->x + BALL_RADIUS >= player_paddle->xpos &&
         ball->y + BALL_RADIUS >= player_paddle->ypos &&
         ball->y - BALL_RADIUS <= player_paddle->ypos + PADDLE_HEIGHT) {
     ball->x = player_paddle->xpos - BALL_RADIUS;
     ball->dx *= -1;
-    if (ball->y > player_paddle->ypos + (PADDLE_HEIGHT/2)) {
-      ball->dy = ball->dy;
+    int dist = ball->y - (player_paddle->ypos + (PADDLE_HEIGHT/2));
+    if (abs(dist) > PADDLE_HEIGHT/4) {
+      ball->dy *= REFLECTION_CONST;
     } else {
-      ball->dy = -ball->dy;
+      ball->dy /= REFLECTION_CONST;
     }
+
+    //ball->dy = ball->dy * (2*(dist/(PADDLE_HEIGHT/2)));
+
+    // if (ball->y > player_paddle->ypos + (PADDLE_HEIGHT/2)) {
+    //   ball->dy = ball->dy;
+    // } else {
+    //   ball->dy = -ball->dy;
+    // }
   }
 
   // collision with left (ai) paddle
@@ -91,11 +105,18 @@ bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
       ball->y - BALL_RADIUS <= ai_paddle->ypos + PADDLE_HEIGHT) {
     ball->x = ai_paddle->xpos + PADDLE_WIDTH + BALL_RADIUS;
     ball->dx *= -1;
-    if (ball->y > ai_paddle->ypos + (PADDLE_HEIGHT/2)) {
-      ball->dy = ball->dy;
+    int dist = ball->y - (player_paddle->ypos + (PADDLE_HEIGHT/2));
+    if (abs(dist) > PADDLE_HEIGHT/4) {
+      ball->dy *= REFLECTION_CONST;
     } else {
-      ball->dy = -ball->dy;
+      ball->dy /= REFLECTION_CONST;
     }
+
+    // if (ball->y > ai_paddle->ypos + (PADDLE_HEIGHT/2)) {
+    //   ball->dy = ball->dy;
+    // } else {
+    //   ball->dy = -ball->dy;
+    // }
   }
 
   return false;
@@ -142,13 +163,6 @@ int main(int argc, char** argv) {
   bool running = true;
   SDL_Event event;
 
-  // TODO:
-  // 1. Paddle Struct
-  // 2. Ball
-  // 3. Paddle Collision
-  // 4. Score
-  // 5. AI
-
   Paddle player_paddle = { .xpos = SCREEN_WIDTH - PADDLE_WIDTH - 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
   Paddle ai_paddle = { .xpos = 0 + 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
 
@@ -186,7 +200,7 @@ int main(int argc, char** argv) {
     // clear screen
     SDL_FillRect(screen_surface, NULL, SDL_MapRGB(screen_surface->format, 0, 0, 0));
 
-    // render
+    // render game objects
     render_paddle(&player_paddle, &paddle_rect);
     render_paddle(&ai_paddle, &ai_paddle_rect);
     render_ball(&ball, &ball_rect);
