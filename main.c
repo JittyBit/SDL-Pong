@@ -15,6 +15,9 @@
 
 #define BALL_RADIUS 5
 #define BALL_DIAMETER BALL_RADIUS*2
+#define BALL_SPEED 5
+#define BALL_INIT_X SCREEN_WIDTH/2 - BALL_RADIUS
+#define BALL_INIT_Y SCREEN_HEIGHT/2 - BALL_RADIUS
 
 #define REFLECTION_CONST 1.5
 
@@ -60,7 +63,7 @@ void ai_move(Paddle* paddle, Ball* ball) {
 
 
 // returns true if ball hit left or right boundary
-bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
+bool move_ball(Ball* ball, const Paddle* const player_paddle, const Paddle* const ai_paddle) {
   ball->y += ball->dy;
   ball->x += ball->dx;
 
@@ -85,19 +88,12 @@ bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
     ball->dx *= -1;
     int dist = ball->y - (player_paddle->ypos + (PADDLE_HEIGHT/2));
     if (abs(dist) > PADDLE_HEIGHT/4) {
-      ball->dy *= REFLECTION_CONST;
+      ball->dy = ball->dy*REFLECTION_CONST + 1;
     } else {
-      ball->dy /= REFLECTION_CONST;
+      ball->dy = ball->dy/REFLECTION_CONST - 1;
     }
-
-    //ball->dy = ball->dy * (2*(dist/(PADDLE_HEIGHT/2)));
-
-    // if (ball->y > player_paddle->ypos + (PADDLE_HEIGHT/2)) {
-    //   ball->dy = ball->dy;
-    // } else {
-    //   ball->dy = -ball->dy;
-    // }
   }
+  //paddle_collision(colliding wall, direction?)
 
   // collision with left (ai) paddle
   if (ball->x - BALL_RADIUS <= ai_paddle->xpos + PADDLE_WIDTH &&
@@ -107,29 +103,23 @@ bool move_ball(Ball* ball, Paddle* player_paddle, Paddle* ai_paddle) {
     ball->dx *= -1;
     int dist = ball->y - (player_paddle->ypos + (PADDLE_HEIGHT/2));
     if (abs(dist) > PADDLE_HEIGHT/4) {
-      ball->dy *= REFLECTION_CONST;
+      ball->dy = ball->dy*REFLECTION_CONST + 1;
     } else {
-      ball->dy /= REFLECTION_CONST;
+      ball->dy = ball->dy/REFLECTION_CONST - 1;
     }
-
-    // if (ball->y > ai_paddle->ypos + (PADDLE_HEIGHT/2)) {
-    //   ball->dy = ball->dy;
-    // } else {
-    //   ball->dy = -ball->dy;
-    // }
   }
 
   return false;
 }
 
-void render_ball(Ball* ball, SDL_Rect* draw_rect) {
+void render_ball(const Ball* ball, SDL_Rect* draw_rect) {
   draw_rect->w = BALL_DIAMETER;
   draw_rect->h = BALL_DIAMETER;
   draw_rect->x = ball->x - (BALL_RADIUS);
   draw_rect->y = ball->y - (BALL_RADIUS);
 }
 
-void render_paddle(Paddle* paddle, SDL_Rect* draw_rect) {
+void render_paddle(const Paddle* paddle, SDL_Rect* draw_rect) {
   draw_rect->x = paddle->xpos;
   draw_rect->y = paddle->ypos;
   draw_rect->w = PADDLE_WIDTH;
@@ -161,12 +151,13 @@ int main(int argc, char** argv) {
 
 
   bool running = true;
+  bool paused = true;
   SDL_Event event;
 
   Paddle player_paddle = { .xpos = SCREEN_WIDTH - PADDLE_WIDTH - 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
   Paddle ai_paddle = { .xpos = 0 + 15, .ypos = (SCREEN_HEIGHT - PADDLE_HEIGHT) / 2 };
 
-  Ball ball = { .x = SCREEN_WIDTH / 2, .y = SCREEN_HEIGHT / 2, .dx = 5, .dy = 5 };
+  Ball ball = { .x = BALL_INIT_X, .y = BALL_INIT_Y, .dx = BALL_SPEED, .dy = -BALL_SPEED };
 
   SDL_Rect paddle_rect = { 0 };
   SDL_Rect ai_paddle_rect = { 0 };
@@ -186,10 +177,15 @@ int main(int argc, char** argv) {
           case SDLK_j: {
             dy = PADDLE_SPEED;
           } break;
+          case SDLK_ESCAPE: {
+            paused = !paused;
+          } break;
           default: {};
         }
       }
     }
+   
+    if (paused) continue;
 
     // update
     player_paddle.ypos += dy;
